@@ -3,15 +3,16 @@ use crate::internal_prelude::*;
 
 use hdf5_sys::{
     h5p::{
-        H5Pcreate, H5Pget_filter2, H5Pget_nfilters, H5Pset_deflate, H5Pset_fletcher32,
-        H5Pset_scaleoffset, H5Pset_shuffle, H5Pset_szip,
+        H5Pcreate, H5Pget_filter2, H5Pget_nfilters, H5Pset_deflate, H5Pset_filter,
+        H5Pset_fletcher32, H5Pset_scaleoffset, H5Pset_shuffle, H5Pset_szip,
     },
     h5t::{H5Tget_class, H5T_FLOAT, H5T_INTEGER},
     h5z::{
         H5Z_filter_t, H5Zfilter_avail, H5Zget_filter_info, H5Z_FILTER_CONFIG_DECODE_ENABLED,
         H5Z_FILTER_CONFIG_ENCODE_ENABLED, H5Z_FILTER_DEFLATE, H5Z_FILTER_FLETCHER32,
-        H5Z_FILTER_SCALEOFFSET, H5Z_FILTER_SHUFFLE, H5Z_FILTER_SZIP, H5Z_SO_FLOAT_DSCALE,
-        H5Z_SO_INT, H5_SZIP_EC_OPTION_MASK, H5_SZIP_NN_OPTION_MASK,
+        H5Z_FILTER_LZF, H5Z_FILTER_SCALEOFFSET, H5Z_FILTER_SHUFFLE, H5Z_FILTER_SZIP,
+        H5Z_FLAG_OPTIONAL, H5Z_SO_FLOAT_DSCALE, H5Z_SO_INT, H5_SZIP_EC_OPTION_MASK,
+        H5_SZIP_NN_OPTION_MASK,
     },
 };
 
@@ -30,6 +31,7 @@ pub fn szip_available() -> bool {
 pub struct Filters {
     gzip: Option<u8>,
     szip: Option<(bool, u8)>,
+    zstd: Option<u32>,
     shuffle: bool,
     fletcher32: bool,
     scale_offset: Option<u32>,
@@ -37,7 +39,14 @@ pub struct Filters {
 
 impl Default for Filters {
     fn default() -> Self {
-        Self { gzip: None, szip: None, shuffle: false, fletcher32: false, scale_offset: None }
+        Self {
+            gzip: None,
+            szip: None,
+            zstd: None,
+            shuffle: false,
+            fletcher32: false,
+            scale_offset: None,
+        }
     }
 }
 
@@ -84,6 +93,11 @@ impl Filters {
     /// method is used and `level` is the associated compression level.
     pub fn get_szip(&self) -> Option<(bool, u8)> {
         self.szip
+    }
+
+    pub fn zstd(&mut self, level: u32) -> &mut Self {
+        self.zstd = Some(level);
+        self
     }
 
     /// Enable or disable shuffle filter.
@@ -141,6 +155,7 @@ impl Filters {
     pub fn has_filters(&self) -> bool {
         self.gzip.is_some()
             || self.szip.is_some()
+            || self.zstd.is_some()
             || self.shuffle
             || self.fletcher32
             || self.scale_offset.is_some()
@@ -148,8 +163,10 @@ impl Filters {
 
     /// Verify whether the filters configuration is valid.
     pub fn validate(&self) -> Result<()> {
-        if self.gzip.is_some() && self.szip.is_some() {
-            fail!("Cannot specify two compression options at once.")
+        if (self.gzip.is_some() as i8) + (self.szip.is_some() as i8) + (self.zstd.is_some() as i8)
+            > 1
+        {
+            fail!("Cannot specify multiple compression options at once.")
         }
         if let Some(level) = self.gzip {
             ensure!(level <= 9, "Invalid level for gzip compression, expected 0-9 integer.");
@@ -304,6 +321,10 @@ impl Filters {
                 Self::ensure_available("szip", H5Z_FILTER_SZIP)?;
                 let options = if nn { H5_SZIP_NN_OPTION_MASK } else { H5_SZIP_EC_OPTION_MASK };
                 h5try!(H5Pset_szip(id, options, c_uint::from(pixels_per_block)));
+            } else if let Some(level) = self.zstd {
+                //Self::ensure_available("zstd", H5Z_FILTER_LZF)?;
+                let level = c_uint::from(level);
+                h5try!(H5Pset_filter(id, H5Z_FILTER_LZF, H5Z_FLAG_OPTIONAL, 1, &level));
             }
 
             Ok(plist)

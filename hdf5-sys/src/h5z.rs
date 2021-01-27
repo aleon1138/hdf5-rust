@@ -17,7 +17,7 @@ pub const H5Z_FILTER_SZIP: H5Z_filter_t = 4;
 pub const H5Z_FILTER_NBIT: H5Z_filter_t = 5;
 pub const H5Z_FILTER_SCALEOFFSET: H5Z_filter_t = 6;
 pub const H5Z_FILTER_RESERVED: H5Z_filter_t = 256;
-
+pub const H5Z_FILTER_LZF: H5Z_filter_t = 32015;
 pub const H5Z_FILTER_MAX: H5Z_filter_t = 65535;
 
 pub const H5Z_FILTER_ALL: H5Z_filter_t = 0;

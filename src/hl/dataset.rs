@@ -326,6 +326,11 @@ impl<T: H5Type> DatasetBuilder<T> {
         self
     }
 
+    pub fn zstd(&mut self, level: u32) -> &mut Self {
+        self.filters.zstd(level);
+        self
+    }
+
     /// Enable or disable shuffle filter.
     pub fn shuffle(&mut self, shuffle: bool) -> &mut Self {
         self.filters.shuffle(shuffle);
